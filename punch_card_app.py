@@ -421,7 +421,7 @@ class PunchCardApp:
             self.logger.error(f"手動打卡時發生異常: {e}")
             messagebox.showerror("錯誤", f"手動打卡失敗: {e}\n請查看日誌了解詳細錯誤")
 
-    def send_webhook(self, punch_type, detailed_log=False):
+    def send_webhook(self, punch_type):
         """發送 Webhook 請求"""
         try:
             data = {
@@ -430,11 +430,6 @@ class PunchCardApp:
                 "message": f"自動打卡系統 - {punch_type}"
             }
 
-            if detailed_log:
-                self.logger.debug(f"準備發送 Webhook 請求:")
-                self.logger.debug(f"  URL: {self.webhook_url}")
-                self.logger.debug(f"  資料: {json.dumps(data, ensure_ascii=False, indent=2)}")
-
             response = requests.post(
                 self.webhook_url,
                 json=data,
@@ -442,31 +437,24 @@ class PunchCardApp:
                 timeout=10
             )
 
-            if detailed_log:
-                self.logger.debug(f"收到回應:")
-                self.logger.debug(f"  狀態碼: {response.status_code}")
-                self.logger.debug(f"  回應標頭: {dict(response.headers)}")
-                self.logger.debug(f"  回應內容: {response.text}")
-
-            if response.status_code == 200:
-                self.logger.info(f"Webhook 請求成功 - {punch_type}")
+            # 修改這裡：200-299 都視為成功
+            if 200 <= response.status_code < 300:
+                self.logger.info(f"Webhook 請求成功 - {punch_type}, 狀態碼: {response.status_code}")
+                return response
             else:
+                response_text = response.text[:200] if response.text else "無回應內容"
                 self.logger.warning(
-                    f"Webhook 請求失敗 - {punch_type}, 狀態碼: {response.status_code}, 回應: {response.text}")
+                    f"Webhook 請求失敗 - {punch_type}, 狀態碼: {response.status_code}, 回應: {response_text}")
+                return response
 
-            return response
-
-        except requests.exceptions.Timeout as e:
-            self.logger.error(f"Webhook 請求超時: {e}")
+        except requests.exceptions.Timeout:
+            self.logger.error(f"Webhook 請求超時 - {punch_type}")
             return None
-        except requests.exceptions.ConnectionError as e:
-            self.logger.error(f"Webhook 連線錯誤: {e}")
-            return None
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Webhook 請求錯誤: {e}")
+        except requests.exceptions.ConnectionError:
+            self.logger.error(f"Webhook 連線錯誤 - {punch_type}")
             return None
         except Exception as e:
-            self.logger.error(f"Webhook 發送時發生未知錯誤: {e}")
+            self.logger.error(f"Webhook 請求異常 - {punch_type}: {e}")
             return None
 
     def start_scheduler(self):
@@ -547,14 +535,16 @@ class PunchCardApp:
             response = self.send_webhook(punch_type)
             current_time = datetime.now()
 
-            if response and response.status_code == 200:
-                record = f"{current_time.strftime('%H:%M:%S')} - {punch_type}成功"
+            # 修改這裡：檢查狀態碼範圍
+            if response and 200 <= response.status_code < 300:
+                record = f"{current_time.strftime('%H:%M:%S')} - {punch_type}成功 (狀態碼: {response.status_code})"
                 self.punch_records.append(record)
-                self.logger.info(f"自動打卡成功: {punch_type}")
+                self.logger.info(f"自動打卡成功: {punch_type}, 狀態碼: {response.status_code}")
             else:
-                record = f"{current_time.strftime('%H:%M:%S')} - {punch_type}失敗"
+                status_code = response.status_code if response else "無回應"
+                record = f"{current_time.strftime('%H:%M:%S')} - {punch_type}失敗 (狀態碼: {status_code})"
                 self.punch_records.append(record)
-                self.logger.error(f"自動打卡失敗: {punch_type}, 狀態碼: {response.status_code if response else 'None'}")
+                self.logger.error(f"自動打卡失敗: {punch_type}, 狀態碼: {status_code}")
 
             # 更新 UI (需要在主執行緒中執行)
             self.root.after(0, self.update_status_display)
