@@ -4,8 +4,8 @@
   "punch_out_time": "22:54",
   "punch_in_start": "09:00",
   "punch_in_end": "09:20",
-  "punch_out_start": "22:49",
-  "punch_out_end": "22:52",
+  "punch_out_start": "00:03",
+  "punch_out_end": "00:05",
   "punch_in_mode": "random",
-  "punch_out_mode": "exact"
+  "punch_out_mode": "random"
 }

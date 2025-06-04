@@ -33,10 +33,141 @@ class PunchCardApp:
         self.punch_in_executed = False
         self.punch_out_executed = False
 
+        # 日期追蹤和自動打卡控制
+        self.last_check_date = None
+        self.auto_punch_enabled = True
+        self.scheduler_running = False
+
         self.setup_ui()
         self.start_scheduler()
 
         self.logger.info("應用程式啟動成功")
+
+    def start_scheduler(self):
+        """啟動排程器"""
+        if not self.scheduler_running:
+            self.scheduler_running = True
+            self.schedule_check()
+            self.logger.info("排程器已啟動")
+
+    def schedule_check(self):
+        """定期檢查打卡時間"""
+        if self.scheduler_running:
+            self.check_punch_time()
+            # 每10秒檢查一次
+            self.root.after(10000, self.schedule_check)
+
+    def check_punch_time(self):
+        """檢查是否到了打卡時間"""
+        if not self.auto_punch_enabled:
+            return
+
+        current_time = datetime.now()
+        current_date = current_time.date()
+
+        # 檢查是否需要重置每日執行狀態
+        if not hasattr(self, 'last_check_date') or self.last_check_date != current_date:
+            self.punch_in_executed = False
+            self.punch_out_executed = False
+            self.last_check_date = current_date
+            self.logger.info(f"新的一天開始，重置打卡狀態: {current_date}")
+
+            # 重新產生隨機時間
+            self.generate_random_times()
+
+        # 檢查上班打卡
+        if not self.punch_in_executed:
+            should_punch_in = False
+
+            if self.punch_in_mode == "exact":
+                target_time_str = self.punch_in_time
+                try:
+                    target_time = datetime.strptime(f"{current_date} {target_time_str}", '%Y-%m-%d %H:%M')
+
+                    # 精確時間：當前時間在目標時間的15秒內（縮短時間窗口）
+                    time_diff = abs((current_time - target_time).total_seconds())
+                    if time_diff <= 15:
+                        should_punch_in = True
+                        self.logger.info(f"觸發上班精確打卡時間: {current_time.strftime('%H:%M:%S')}")
+                except ValueError as e:
+                    self.logger.error(f"上班精確時間格式錯誤: {e}")
+
+            elif self.punch_in_mode == "random":
+                if self.punch_in_random_time:
+                    # 隨機時間：當前時間超過隨機時間且在30秒內（縮短時間窗口）
+                    time_diff = (current_time - self.punch_in_random_time).total_seconds()
+                    if 0 <= time_diff <= 30:  # 0到30秒內
+                        should_punch_in = True
+                        self.logger.info(
+                            f"觸發上班隨機打卡時間: {current_time.strftime('%H:%M:%S')}, 目標時間: {self.punch_in_random_time.strftime('%H:%M:%S')}")
+
+            if should_punch_in:
+                self.punch_in_executed = True  # 立即設置為已執行，防止重複
+                self.schedule_punch("上班打卡")
+
+        # 檢查下班打卡
+        if not self.punch_out_executed:
+            should_punch_out = False
+
+            if self.punch_out_mode == "exact":
+                target_time_str = self.punch_out_time
+                try:
+                    target_time = datetime.strptime(f"{current_date} {target_time_str}", '%Y-%m-%d %H:%M')
+
+                    # 精確時間：當前時間在目標時間的15秒內（縮短時間窗口）
+                    time_diff = abs((current_time - target_time).total_seconds())
+                    if time_diff <= 15:
+                        should_punch_out = True
+                        self.logger.info(f"觸發下班精確打卡時間: {current_time.strftime('%H:%M:%S')}")
+                except ValueError as e:
+                    self.logger.error(f"下班精確時間格式錯誤: {e}")
+
+            elif self.punch_out_mode == "random":
+                if self.punch_out_random_time:
+                    # 隨機時間：當前時間超過隨機時間且在30秒內（縮短時間窗口）
+                    time_diff = (current_time - self.punch_out_random_time).total_seconds()
+                    if 0 <= time_diff <= 30:  # 0到30秒內
+                        should_punch_out = True
+                        self.logger.info(
+                            f"觸發下班隨機打卡時間: {current_time.strftime('%H:%M:%S')}, 目標時間: {self.punch_out_random_time.strftime('%H:%M:%S')}")
+
+            if should_punch_out:
+                self.punch_out_executed = True  # 立即設置為已執行，防止重複
+                self.schedule_punch("下班打卡")
+
+    def schedule_punch(self, punch_type):
+        """排程打卡執行"""
+
+        def punch_task():
+            try:
+                current_time = datetime.now()
+                self.logger.info(f"開始執行自動打卡: {punch_type}")
+
+                response = self.send_webhook(punch_type)
+
+                # 檢查回應狀態
+                if response and 200 <= response.status_code < 300:
+                    record = f"{current_time.strftime('%H:%M:%S')} - {punch_type}成功 (狀態碼: {response.status_code})"
+                    self.punch_records.append(record)
+                    self.logger.info(f"自動打卡成功: {punch_type}, 狀態碼: {response.status_code}")
+                else:
+                    status_code = response.status_code if response else "無回應"
+                    record = f"{current_time.strftime('%H:%M:%S')} - {punch_type}失敗 (狀態碼: {status_code})"
+                    self.punch_records.append(record)
+                    self.logger.error(f"自動打卡失敗: {punch_type}, 狀態碼: {status_code}")
+
+                # 更新 UI (需要在主執行緒中執行)
+                self.root.after(0, self.update_status_display)
+
+            except Exception as e:
+                current_time = datetime.now()
+                record = f"{current_time.strftime('%H:%M:%S')} - {punch_type}錯誤: {e}"
+                self.punch_records.append(record)
+                self.logger.error(f"自動打卡時發生異常: {punch_type}, 錯誤: {e}")
+                self.root.after(0, self.update_status_display)
+
+        # 在新執行緒中執行打卡
+        threading.Thread(target=punch_task, daemon=True).start()
 
     def setup_logging(self):
         """設定日誌系統"""
@@ -219,6 +350,7 @@ class PunchCardApp:
         ttk.Button(button_frame, text="測試 Webhook", command=self.test_webhook).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="手動打卡", command=self.manual_punch).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="查看日誌", command=self.show_logs).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="重置狀態", command=self.reset_punch_status).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="重新產生隨機時間", command=self.regenerate_random_times).pack(side=tk.LEFT,
                                                                                                      padx=5)
 
@@ -295,8 +427,18 @@ class PunchCardApp:
 
             self.save_config()
 
-            # 重新產生隨機時間
+            # 修改：暫停自動打卡，重新產生隨機時間，然後恢復
+            was_enabled = self.auto_punch_enabled
+            self.auto_punch_enabled = False  # 暫停自動打卡
+
             self.generate_random_times()
+
+            # 延遲恢復自動打卡，避免立即觸發
+            def restore_auto_punch():
+                self.auto_punch_enabled = was_enabled
+                self.logger.info("自動打卡功能已恢復")
+
+            self.root.after(2000, restore_auto_punch)  # 2秒後恢復
 
             self.logger.info("設定儲存成功")
             messagebox.showinfo("成功", "設定已儲存")
@@ -321,30 +463,44 @@ class PunchCardApp:
             raise ValueError(f"{field_name} 錯誤：開始時間必須早於結束時間")
 
     def generate_random_times(self):
-        """產生今日的隨機打卡時間"""
-        today = datetime.now().date()
-
-        # 重置執行狀態
-        self.punch_in_executed = False
-        self.punch_out_executed = False
+        """產生隨機打卡時間"""
+        current_date = datetime.now().date()
 
         # 產生上班隨機時間
         if self.punch_in_mode == "random":
-            self.punch_in_random_time = self.get_random_time_in_range(
-                self.punch_in_start, self.punch_in_end
-            )
-            self.logger.info(f"今日上班隨機打卡時間: {self.punch_in_random_time.strftime('%H:%M:%S')}")
-        else:
-            self.punch_in_random_time = None
+            try:
+                start_time = datetime.strptime(f"{current_date} {self.punch_in_start}", '%Y-%m-%d %H:%M')
+                end_time = datetime.strptime(f"{current_date} {self.punch_in_end}", '%Y-%m-%d %H:%M')
+
+                time_diff = int((end_time - start_time).total_seconds())
+                if time_diff > 0:
+                    random_seconds = random.randint(0, time_diff)
+                    self.punch_in_random_time = start_time + timedelta(seconds=random_seconds)
+                    self.logger.info(f"產生上班隨機時間: {self.punch_in_random_time.strftime('%H:%M:%S')}")
+                else:
+                    self.logger.error("上班時間區間設定錯誤")
+                    self.punch_in_random_time = None
+            except ValueError as e:
+                self.logger.error(f"產生上班隨機時間失敗: {e}")
+                self.punch_in_random_time = None
 
         # 產生下班隨機時間
         if self.punch_out_mode == "random":
-            self.punch_out_random_time = self.get_random_time_in_range(
-                self.punch_out_start, self.punch_out_end
-            )
-            self.logger.info(f"今日下班隨機打卡時間: {self.punch_out_random_time.strftime('%H:%M:%S')}")
-        else:
-            self.punch_out_random_time = None
+            try:
+                start_time = datetime.strptime(f"{current_date} {self.punch_out_start}", '%Y-%m-%d %H:%M')
+                end_time = datetime.strptime(f"{current_date} {self.punch_out_end}", '%Y-%m-%d %H:%M')
+
+                time_diff = int((end_time - start_time).total_seconds())
+                if time_diff > 0:
+                    random_seconds = random.randint(0, time_diff)
+                    self.punch_out_random_time = start_time + timedelta(seconds=random_seconds)
+                    self.logger.info(f"產生下班隨機時間: {self.punch_out_random_time.strftime('%H:%M:%S')}")
+                else:
+                    self.logger.error("下班時間區間設定錯誤")
+                    self.punch_out_random_time = None
+            except ValueError as e:
+                self.logger.error(f"產生下班隨機時間失敗: {e}")
+                self.punch_out_random_time = None
 
     def get_random_time_in_range(self, start_time_str, end_time_str):
         """在指定時間範圍內產生隨機時間"""
@@ -367,61 +523,38 @@ class PunchCardApp:
         self.update_status_display()
         messagebox.showinfo("成功", "隨機時間已重新產生")
 
-    def test_webhook(self):
-        """測試 Webhook"""
-        if not self.webhook_url:
-            self.logger.warning("嘗試測試 Webhook 但 URL 為空")
-            messagebox.showwarning("警告", "請先設定 Webhook URL")
-            return
-
-        self.logger.info(f"開始測試 Webhook: {self.webhook_url}")
-
-        try:
-            response = self.send_webhook("測試打卡", detailed_log=True)
-            if response:
-                self.logger.info(f"Webhook 測試成功 - 狀態碼: {response.status_code}")
-                messagebox.showinfo("成功", f"Webhook 測試成功\n狀態碼: {response.status_code}")
-            else:
-                self.logger.error("Webhook 測試失敗 - 無回應")
-                messagebox.showerror("失敗", "Webhook 測試失敗 - 請查看日誌了解詳細錯誤")
-        except Exception as e:
-            self.logger.error(f"測試 Webhook 時發生異常: {e}")
-            messagebox.showerror("錯誤", f"測試失敗: {e}\n請查看日誌了解詳細錯誤")
-
     def manual_punch(self):
         """手動打卡"""
+        punch_types = ["上班打卡", "下班打卡"]
+        punch_type = simpledialog.askstring("手動打卡",
+                                            f"請選擇打卡類型：\n1. {punch_types[0]}\n2. {punch_types[1]}\n請輸入 1 或 2：")
+
+        if punch_type in ['1', '2']:
+            selected_type = punch_types[int(punch_type) - 1]
+            response = self.send_webhook(selected_type, detailed_log=True)
+
+            if response and 200 <= response.status_code < 300:
+                messagebox.showinfo("成功", f"{selected_type}成功！")
+            else:
+                messagebox.showerror("失敗", f"{selected_type}失敗！")
+
+            self.update_status_display()
+
+    def test_webhook(self):
+        """測試 Webhook 連接"""
         if not self.webhook_url:
-            self.logger.warning("嘗試手動打卡但 Webhook URL 為空")
             messagebox.showwarning("警告", "請先設定 Webhook URL")
             return
 
-        self.logger.info("開始手動打卡")
+        response = self.send_webhook("測試連接", detailed_log=True)
 
-        try:
-            current_time = datetime.now()
-            response = self.send_webhook("手動打卡", detailed_log=True)
+        if response and 200 <= response.status_code < 300:
+            messagebox.showinfo("成功", f"Webhook 測試成功！\n狀態碼: {response.status_code}")
+        else:
+            status_code = response.status_code if response else "無回應"
+            messagebox.showerror("失敗", f"Webhook 測試失敗！\n狀態碼: {status_code}")
 
-            if response and response.status_code == 200:
-                record = f"{current_time.strftime('%H:%M:%S')} - 手動打卡成功"
-                self.punch_records.append(record)
-                self.update_status_display()
-                self.logger.info("手動打卡成功")
-                messagebox.showinfo("成功", "手動打卡成功")
-            else:
-                record = f"{current_time.strftime('%H:%M:%S')} - 手動打卡失敗"
-                self.punch_records.append(record)
-                self.update_status_display()
-                self.logger.error(f"手動打卡失敗 - 狀態碼: {response.status_code if response else 'None'}")
-                messagebox.showerror("失敗", "手動打卡失敗 - 請查看日誌了解詳細錯誤")
-        except Exception as e:
-            current_time = datetime.now()
-            record = f"{current_time.strftime('%H:%M:%S')} - 手動打卡錯誤"
-            self.punch_records.append(record)
-            self.update_status_display()
-            self.logger.error(f"手動打卡時發生異常: {e}")
-            messagebox.showerror("錯誤", f"手動打卡失敗: {e}\n請查看日誌了解詳細錯誤")
-
-    def send_webhook(self, punch_type):
+    def send_webhook(self, punch_type, detailed_log=False):
         """發送 Webhook 請求"""
         try:
             data = {
@@ -430,6 +563,11 @@ class PunchCardApp:
                 "message": f"自動打卡系統 - {punch_type}"
             }
 
+            if detailed_log:
+                self.logger.info(f"發送 Webhook 請求 - {punch_type}")
+                self.logger.info(f"URL: {self.webhook_url}")
+                self.logger.info(f"Data: {json.dumps(data, ensure_ascii=False)}")
+
             response = requests.post(
                 self.webhook_url,
                 json=data,
@@ -437,7 +575,7 @@ class PunchCardApp:
                 timeout=10
             )
 
-            # 修改這裡：200-299 都視為成功
+            # 修改：200-299 都視為成功
             if 200 <= response.status_code < 300:
                 self.logger.info(f"Webhook 請求成功 - {punch_type}, 狀態碼: {response.status_code}")
                 return response
@@ -628,6 +766,14 @@ class PunchCardApp:
         # 自動捲動到底部
         self.status_text.see(tk.END)
 
+    def reset_punch_status(self):
+        """手動重置打卡狀態"""
+        self.punch_in_executed = False
+        self.punch_out_executed = False
+        self.punch_records.clear()
+        self.logger.info("手動重置打卡狀態")
+        messagebox.showinfo("成功", "打卡狀態已重置")
+        self.update_status_display()
 
 if __name__ == "__main__":
     root = tk.Tk()
