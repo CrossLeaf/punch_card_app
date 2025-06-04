@@ -33,3 +33,19 @@
 2025-06-04 22:24:25,840 - DEBUG -   回應內容: 
 2025-06-04 22:24:25,840 - WARNING - Webhook 請求失敗 - 測試打卡, 狀態碼: 202, 回應: 
 2025-06-04 22:24:25,840 - INFO - Webhook 測試成功 - 狀態碼: 202
+2025-06-04 22:26:55,143 - INFO - 設定變更: Webhook URL: https://prod-48.southeastasia.logic.azure.com:443/workflows/05d16d6c5b924d278e36280d1e15943f/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=k2MWtkl4AUXxk5Wnl4DuixYneDV7mHhpH_Ylk5wSh1Y -> https://prod-48.southeastasia.logic.azure.com:443/workflows/05d16d6c5b924d278e36280d1e15943f/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=k2MWtkl4AUXxk5Wnl4DuixYneDV7mHhpH_Ylk5wSh1Y
+2025-06-04 22:26:55,143 - INFO - 設定變更: 上班時間: 09:00 -> 09:00
+2025-06-04 22:26:55,143 - INFO - 設定變更: 下班時間: 18:00 -> 22:28
+2025-06-04 22:26:55,144 - INFO - 設定檔儲存成功
+2025-06-04 22:28:07,353 - INFO - 觸發下班打卡時間: 22:28
+2025-06-04 22:28:07,353 - INFO - 開始自動打卡: 下班打卡
+2025-06-04 22:28:07,679 - WARNING - Webhook 請求失敗 - 下班打卡, 狀態碼: 202, 回應: 
+2025-06-04 22:28:07,679 - ERROR - 自動打卡失敗: 下班打卡, 狀態碼: 202
+2025-06-04 22:33:11,681 - INFO - 設定變更: Webhook URL: https://prod-48.southeastasia.logic.azure.com:443/workflows/05d16d6c5b924d278e36280d1e15943f/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=k2MWtkl4AUXxk5Wnl4DuixYneDV7mHhpH_Ylk5wSh1Y -> https://prod-48.southeastasia.logic.azure.com:443/workflows/05d16d6c5b924d278e36280d1e15943f/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=k2MWtkl4AUXxk5Wnl4DuixYneDV7mHhpH_Ylk5wSh1Y
+2025-06-04 22:33:11,681 - INFO - 設定變更: 上班時間: 09:00 -> 09:00
+2025-06-04 22:33:11,681 - INFO - 設定變更: 下班時間: 22:28 -> 22:34
+2025-06-04 22:33:11,682 - INFO - 設定檔儲存成功
+2025-06-04 22:34:07,681 - INFO - 觸發下班打卡時間: 22:34
+2025-06-04 22:34:07,682 - INFO - 開始自動打卡: 下班打卡
+2025-06-04 22:34:08,006 - WARNING - Webhook 請求失敗 - 下班打卡, 狀態碼: 202, 回應: 
+2025-06-04 22:34:08,006 - ERROR - 自動打卡失敗: 下班打卡, 狀態碼: 202

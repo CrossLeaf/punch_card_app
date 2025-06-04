@@ -8,13 +8,14 @@ from datetime import datetime, timedelta
 import os
 import logging
 from logging.handlers import RotatingFileHandler
+import random
 
 
 class PunchCardApp:
     def __init__(self, root):
         self.root = root
         self.root.title("自動打卡系統")
-        self.root.geometry("700x600")
+        self.root.geometry("800x700")
 
         # 設定日誌系統
         self.setup_logging()
@@ -25,6 +26,12 @@ class PunchCardApp:
 
         # 打卡記錄
         self.punch_records = []
+
+        # 隨機時間控制
+        self.punch_in_random_time = None
+        self.punch_out_random_time = None
+        self.punch_in_executed = False
+        self.punch_out_executed = False
 
         self.setup_ui()
         self.start_scheduler()
@@ -75,26 +82,53 @@ class PunchCardApp:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
                     self.webhook_url = config.get('webhook_url', '')
+
+                    # 舊版相容性
                     self.punch_in_time = config.get('punch_in_time', '09:00')
                     self.punch_out_time = config.get('punch_out_time', '18:00')
+
+                    # 新增時間區間設定
+                    self.punch_in_start = config.get('punch_in_start', '09:00')
+                    self.punch_in_end = config.get('punch_in_end', '09:20')
+                    self.punch_out_start = config.get('punch_out_start', '18:00')
+                    self.punch_out_end = config.get('punch_out_end', '18:20')
+
+                    # 模式設定 (exact: 精確時間, random: 隨機區間)
+                    self.punch_in_mode = config.get('punch_in_mode', 'exact')
+                    self.punch_out_mode = config.get('punch_out_mode', 'exact')
+
                     self.logger.info(f"設定檔載入成功: {self.config_file}")
             else:
-                self.webhook_url = ''
-                self.punch_in_time = '09:00'
-                self.punch_out_time = '18:00'
+                self.set_default_config()
                 self.logger.info("使用預設設定")
         except Exception as e:
             self.logger.error(f"載入設定失敗: {e}")
-            self.webhook_url = ''
-            self.punch_in_time = '09:00'
-            self.punch_out_time = '18:00'
+            self.set_default_config()
+
+    def set_default_config(self):
+        """設定預設值"""
+        self.webhook_url = ''
+        self.punch_in_time = '09:00'
+        self.punch_out_time = '18:00'
+        self.punch_in_start = '09:00'
+        self.punch_in_end = '09:20'
+        self.punch_out_start = '18:00'
+        self.punch_out_end = '18:20'
+        self.punch_in_mode = 'exact'
+        self.punch_out_mode = 'exact'
 
     def save_config(self):
         """儲存設定檔"""
         config = {
             'webhook_url': self.webhook_url,
             'punch_in_time': self.punch_in_time,
-            'punch_out_time': self.punch_out_time
+            'punch_out_time': self.punch_out_time,
+            'punch_in_start': self.punch_in_start,
+            'punch_in_end': self.punch_in_end,
+            'punch_out_start': self.punch_out_start,
+            'punch_out_end': self.punch_out_end,
+            'punch_in_mode': self.punch_in_mode,
+            'punch_out_mode': self.punch_out_mode
         }
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
@@ -114,31 +148,85 @@ class PunchCardApp:
         ttk.Label(main_frame, text="Webhook URL:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.url_var = tk.StringVar(value=self.webhook_url)
         url_entry = ttk.Entry(main_frame, textvariable=self.url_var, width=60)
-        url_entry.grid(row=0, column=1, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        url_entry.grid(row=0, column=1, columnspan=4, sticky=(tk.W, tk.E), pady=5)
 
-        # 時間設定
-        ttk.Label(main_frame, text="上班打卡時間:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.punch_in_var = tk.StringVar(value=self.punch_in_time)
-        ttk.Entry(main_frame, textvariable=self.punch_in_var, width=10).grid(row=1, column=1, sticky=tk.W, pady=5)
+        # 上班打卡設定
+        punch_in_frame = ttk.LabelFrame(main_frame, text="上班打卡設定", padding="10")
+        punch_in_frame.grid(row=1, column=0, columnspan=5, sticky=(tk.W, tk.E), pady=10)
 
-        ttk.Label(main_frame, text="下班打卡時間:").grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.punch_out_var = tk.StringVar(value=self.punch_out_time)
-        ttk.Entry(main_frame, textvariable=self.punch_out_var, width=10).grid(row=2, column=1, sticky=tk.W, pady=5)
+        self.punch_in_mode_var = tk.StringVar(value=self.punch_in_mode)
+        ttk.Radiobutton(punch_in_frame, text="精確時間", variable=self.punch_in_mode_var,
+                        value="exact", command=self.update_punch_in_mode).grid(row=0, column=0, sticky=tk.W, padx=5)
+        ttk.Radiobutton(punch_in_frame, text="隨機區間", variable=self.punch_in_mode_var,
+                        value="random", command=self.update_punch_in_mode).grid(row=0, column=1, sticky=tk.W, padx=5)
+
+        # 精確時間設定
+        self.punch_in_exact_frame = ttk.Frame(punch_in_frame)
+        self.punch_in_exact_frame.grid(row=1, column=0, columnspan=5, sticky=(tk.W, tk.E), pady=5)
+        ttk.Label(self.punch_in_exact_frame, text="打卡時間:").grid(row=0, column=0, sticky=tk.W, padx=5)
+        self.punch_in_time_var = tk.StringVar(value=self.punch_in_time)
+        ttk.Entry(self.punch_in_exact_frame, textvariable=self.punch_in_time_var, width=10).grid(row=0, column=1,
+                                                                                                 sticky=tk.W, padx=5)
+
+        # 隨機區間設定
+        self.punch_in_random_frame = ttk.Frame(punch_in_frame)
+        self.punch_in_random_frame.grid(row=2, column=0, columnspan=5, sticky=(tk.W, tk.E), pady=5)
+        ttk.Label(self.punch_in_random_frame, text="開始時間:").grid(row=0, column=0, sticky=tk.W, padx=5)
+        self.punch_in_start_var = tk.StringVar(value=self.punch_in_start)
+        ttk.Entry(self.punch_in_random_frame, textvariable=self.punch_in_start_var, width=10).grid(row=0, column=1,
+                                                                                                   sticky=tk.W, padx=5)
+        ttk.Label(self.punch_in_random_frame, text="結束時間:").grid(row=0, column=2, sticky=tk.W, padx=5)
+        self.punch_in_end_var = tk.StringVar(value=self.punch_in_end)
+        ttk.Entry(self.punch_in_random_frame, textvariable=self.punch_in_end_var, width=10).grid(row=0, column=3,
+                                                                                                 sticky=tk.W, padx=5)
+
+        # 下班打卡設定
+        punch_out_frame = ttk.LabelFrame(main_frame, text="下班打卡設定", padding="10")
+        punch_out_frame.grid(row=2, column=0, columnspan=5, sticky=(tk.W, tk.E), pady=10)
+
+        self.punch_out_mode_var = tk.StringVar(value=self.punch_out_mode)
+        ttk.Radiobutton(punch_out_frame, text="精確時間", variable=self.punch_out_mode_var,
+                        value="exact", command=self.update_punch_out_mode).grid(row=0, column=0, sticky=tk.W, padx=5)
+        ttk.Radiobutton(punch_out_frame, text="隨機區間", variable=self.punch_out_mode_var,
+                        value="random", command=self.update_punch_out_mode).grid(row=0, column=1, sticky=tk.W, padx=5)
+
+        # 精確時間設定
+        self.punch_out_exact_frame = ttk.Frame(punch_out_frame)
+        self.punch_out_exact_frame.grid(row=1, column=0, columnspan=5, sticky=(tk.W, tk.E), pady=5)
+        ttk.Label(self.punch_out_exact_frame, text="打卡時間:").grid(row=0, column=0, sticky=tk.W, padx=5)
+        self.punch_out_time_var = tk.StringVar(value=self.punch_out_time)
+        ttk.Entry(self.punch_out_exact_frame, textvariable=self.punch_out_time_var, width=10).grid(row=0, column=1,
+                                                                                                   sticky=tk.W, padx=5)
+
+        # 隨機區間設定
+        self.punch_out_random_frame = ttk.Frame(punch_out_frame)
+        self.punch_out_random_frame.grid(row=2, column=0, columnspan=5, sticky=(tk.W, tk.E), pady=5)
+        ttk.Label(self.punch_out_random_frame, text="開始時間:").grid(row=0, column=0, sticky=tk.W, padx=5)
+        self.punch_out_start_var = tk.StringVar(value=self.punch_out_start)
+        ttk.Entry(self.punch_out_random_frame, textvariable=self.punch_out_start_var, width=10).grid(row=0, column=1,
+                                                                                                     sticky=tk.W,
+                                                                                                     padx=5)
+        ttk.Label(self.punch_out_random_frame, text="結束時間:").grid(row=0, column=2, sticky=tk.W, padx=5)
+        self.punch_out_end_var = tk.StringVar(value=self.punch_out_end)
+        ttk.Entry(self.punch_out_random_frame, textvariable=self.punch_out_end_var, width=10).grid(row=0, column=3,
+                                                                                                   sticky=tk.W, padx=5)
 
         # 按鈕
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=3, column=0, columnspan=3, pady=20)
+        button_frame.grid(row=3, column=0, columnspan=5, pady=20)
 
         ttk.Button(button_frame, text="儲存設定", command=self.save_settings).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="測試 Webhook", command=self.test_webhook).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="手動打卡", command=self.manual_punch).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="查看日誌", command=self.show_logs).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="重新產生隨機時間", command=self.regenerate_random_times).pack(side=tk.LEFT,
+                                                                                                     padx=5)
 
         # 今日打卡狀態
         status_frame = ttk.LabelFrame(main_frame, text="今日打卡狀態", padding="10")
-        status_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        status_frame.grid(row=4, column=0, columnspan=5, sticky=(tk.W, tk.E), pady=10)
 
-        self.status_text = tk.Text(status_frame, height=8, width=70)
+        self.status_text = tk.Text(status_frame, height=10, width=80)
         scrollbar = ttk.Scrollbar(status_frame, orient="vertical", command=self.status_text.yview)
         self.status_text.configure(yscrollcommand=scrollbar.set)
 
@@ -147,41 +235,137 @@ class PunchCardApp:
 
         # 系統狀態
         self.system_status = ttk.Label(main_frame, text="系統狀態: 運行中", foreground="green")
-        self.system_status.grid(row=5, column=0, columnspan=3, pady=10)
+        self.system_status.grid(row=5, column=0, columnspan=5, pady=10)
 
-        # 更新狀態顯示
+        # 初始化 UI 狀態
+        self.update_punch_in_mode()
+        self.update_punch_out_mode()
         self.update_status_display()
+
+    def update_punch_in_mode(self):
+        """更新上班打卡模式顯示"""
+        if self.punch_in_mode_var.get() == "exact":
+            self.punch_in_exact_frame.grid()
+            self.punch_in_random_frame.grid_remove()
+        else:
+            self.punch_in_exact_frame.grid_remove()
+            self.punch_in_random_frame.grid()
+
+    def update_punch_out_mode(self):
+        """更新下班打卡模式顯示"""
+        if self.punch_out_mode_var.get() == "exact":
+            self.punch_out_exact_frame.grid()
+            self.punch_out_random_frame.grid_remove()
+        else:
+            self.punch_out_exact_frame.grid_remove()
+            self.punch_out_random_frame.grid()
 
     def save_settings(self):
         """儲存設定"""
-        old_webhook = self.webhook_url
-        old_punch_in = self.punch_in_time
-        old_punch_out = self.punch_out_time
-
-        self.webhook_url = self.url_var.get()
-        self.punch_in_time = self.punch_in_var.get()
-        self.punch_out_time = self.punch_out_var.get()
-
-        self.logger.info(f"設定變更: Webhook URL: {old_webhook} -> {self.webhook_url}")
-        self.logger.info(f"設定變更: 上班時間: {old_punch_in} -> {self.punch_in_time}")
-        self.logger.info(f"設定變更: 下班時間: {old_punch_out} -> {self.punch_out_time}")
-
-        if not self.webhook_url:
-            self.logger.warning("Webhook URL 為空")
-            messagebox.showwarning("警告", "請輸入 Webhook URL")
-            return
-
-        # 驗證時間格式
         try:
-            datetime.strptime(self.punch_in_time, '%H:%M')
-            datetime.strptime(self.punch_out_time, '%H:%M')
-        except ValueError as e:
-            self.logger.error(f"時間格式錯誤: {e}")
-            messagebox.showerror("錯誤", "時間格式錯誤，請使用 HH:MM 格式")
-            return
+            # 儲存基本設定
+            self.webhook_url = self.url_var.get()
+            self.punch_in_time = self.punch_in_time_var.get()
+            self.punch_out_time = self.punch_out_time_var.get()
+            self.punch_in_start = self.punch_in_start_var.get()
+            self.punch_in_end = self.punch_in_end_var.get()
+            self.punch_out_start = self.punch_out_start_var.get()
+            self.punch_out_end = self.punch_out_end_var.get()
+            self.punch_in_mode = self.punch_in_mode_var.get()
+            self.punch_out_mode = self.punch_out_mode_var.get()
 
-        self.save_config()
-        messagebox.showinfo("成功", "設定已儲存")
+            if not self.webhook_url:
+                self.logger.warning("Webhook URL 為空")
+                messagebox.showwarning("警告", "請輸入 Webhook URL")
+                return
+
+            # 驗證時間格式
+            self.validate_time_format(self.punch_in_time, "上班精確時間")
+            self.validate_time_format(self.punch_out_time, "下班精確時間")
+            self.validate_time_format(self.punch_in_start, "上班開始時間")
+            self.validate_time_format(self.punch_in_end, "上班結束時間")
+            self.validate_time_format(self.punch_out_start, "下班開始時間")
+            self.validate_time_format(self.punch_out_end, "下班結束時間")
+
+            # 驗證時間區間
+            if self.punch_in_mode == "random":
+                self.validate_time_range(self.punch_in_start, self.punch_in_end, "上班時間區間")
+            if self.punch_out_mode == "random":
+                self.validate_time_range(self.punch_out_start, self.punch_out_end, "下班時間區間")
+
+            self.save_config()
+
+            # 重新產生隨機時間
+            self.generate_random_times()
+
+            self.logger.info("設定儲存成功")
+            messagebox.showinfo("成功", "設定已儲存")
+            self.update_status_display()
+
+        except ValueError as e:
+            self.logger.error(f"設定驗證失敗: {e}")
+            messagebox.showerror("錯誤", str(e))
+
+    def validate_time_format(self, time_str, field_name):
+        """驗證時間格式"""
+        try:
+            datetime.strptime(time_str, '%H:%M')
+        except ValueError:
+            raise ValueError(f"{field_name} 格式錯誤，請使用 HH:MM 格式")
+
+    def validate_time_range(self, start_time, end_time, field_name):
+        """驗證時間區間"""
+        start = datetime.strptime(start_time, '%H:%M')
+        end = datetime.strptime(end_time, '%H:%M')
+        if start >= end:
+            raise ValueError(f"{field_name} 錯誤：開始時間必須早於結束時間")
+
+    def generate_random_times(self):
+        """產生今日的隨機打卡時間"""
+        today = datetime.now().date()
+
+        # 重置執行狀態
+        self.punch_in_executed = False
+        self.punch_out_executed = False
+
+        # 產生上班隨機時間
+        if self.punch_in_mode == "random":
+            self.punch_in_random_time = self.get_random_time_in_range(
+                self.punch_in_start, self.punch_in_end
+            )
+            self.logger.info(f"今日上班隨機打卡時間: {self.punch_in_random_time.strftime('%H:%M:%S')}")
+        else:
+            self.punch_in_random_time = None
+
+        # 產生下班隨機時間
+        if self.punch_out_mode == "random":
+            self.punch_out_random_time = self.get_random_time_in_range(
+                self.punch_out_start, self.punch_out_end
+            )
+            self.logger.info(f"今日下班隨機打卡時間: {self.punch_out_random_time.strftime('%H:%M:%S')}")
+        else:
+            self.punch_out_random_time = None
+
+    def get_random_time_in_range(self, start_time_str, end_time_str):
+        """在指定時間範圍內產生隨機時間"""
+        today = datetime.now().date()
+        start_time = datetime.combine(today, datetime.strptime(start_time_str, '%H:%M').time())
+        end_time = datetime.combine(today, datetime.strptime(end_time_str, '%H:%M').time())
+
+        # 計算時間差（秒）
+        time_diff = int((end_time - start_time).total_seconds())
+
+        # 產生隨機秒數
+        random_seconds = random.randint(0, time_diff)
+
+        # 回傳隨機時間
+        return start_time + timedelta(seconds=random_seconds)
+
+    def regenerate_random_times(self):
+        """重新產生隨機時間"""
+        self.generate_random_times()
+        self.update_status_display()
+        messagebox.showinfo("成功", "隨機時間已重新產生")
 
     def test_webhook(self):
         """測試 Webhook"""
@@ -290,20 +474,59 @@ class PunchCardApp:
 
         def scheduler():
             self.logger.info("排程器啟動")
+            # 產生今日隨機時間
+            self.generate_random_times()
+
             while True:
                 try:
                     current_time = datetime.now()
-                    current_time_str = current_time.strftime('%H:%M')
+                    current_date = current_time.date()
 
-                    # 檢查是否需要打卡
-                    if current_time_str == self.punch_in_time:
-                        self.logger.info(f"觸發上班打卡時間: {current_time_str}")
-                        self.auto_punch("上班打卡")
-                    elif current_time_str == self.punch_out_time:
-                        self.logger.info(f"觸發下班打卡時間: {current_time_str}")
-                        self.auto_punch("下班打卡")
+                    # 檢查是否需要重新產生隨機時間（新的一天）
+                    if (self.punch_in_random_time and
+                            self.punch_in_random_time.date() != current_date):
+                        self.generate_random_times()
 
-                    time.sleep(60)  # 每分鐘檢查一次
+                    # 檢查上班打卡
+                    if self.punch_in_mode == "exact":
+                        # 精確時間模式
+                        if (current_time.strftime('%H:%M') == self.punch_in_time and
+                                not self.punch_in_executed):
+                            self.logger.info(f"觸發上班打卡時間: {current_time.strftime('%H:%M')}")
+                            self.auto_punch("上班打卡")
+                            self.punch_in_executed = True
+                    else:
+                        # 隨機時間模式
+                        if (self.punch_in_random_time and
+                                current_time >= self.punch_in_random_time and
+                                not self.punch_in_executed):
+                            self.logger.info(f"觸發上班隨機打卡時間: {current_time.strftime('%H:%M:%S')}")
+                            self.auto_punch("上班打卡")
+                            self.punch_in_executed = True
+
+                    # 檢查下班打卡
+                    if self.punch_out_mode == "exact":
+                        # 精確時間模式
+                        if (current_time.strftime('%H:%M') == self.punch_out_time and
+                                not self.punch_out_executed):
+                            self.logger.info(f"觸發下班打卡時間: {current_time.strftime('%H:%M')}")
+                            self.auto_punch("下班打卡")
+                            self.punch_out_executed = True
+                    else:
+                        # 隨機時間模式
+                        if (self.punch_out_random_time and
+                                current_time >= self.punch_out_random_time and
+                                not self.punch_out_executed):
+                            self.logger.info(f"觸發下班隨機打卡時間: {current_time.strftime('%H:%M:%S')}")
+                            self.auto_punch("下班打卡")
+                            self.punch_out_executed = True
+                    # 重置執行狀態（新的一天）
+                    if current_time.hour == 0 and current_time.minute == 0:
+                        self.punch_in_executed = False
+                        self.punch_out_executed = False
+                        self.logger.info("新的一天開始，重置打卡狀態")
+
+                    time.sleep(30)  # 每30秒檢查一次（提高精確度）
                 except Exception as e:
                     self.logger.error(f"排程器錯誤: {e}")
                     time.sleep(60)
@@ -347,10 +570,10 @@ class PunchCardApp:
         """顯示日誌視窗"""
         log_window = tk.Toplevel(self.root)
         log_window.title("系統日誌")
-        log_window.geometry("800x600")
+        log_window.geometry("900x600")
 
         # 建立文字區域
-        log_text = tk.Text(log_window, wrap=tk.WORD)
+        log_text = tk.Text(log_window, wrap=tk.WORD, font=('Consolas', 9))
         log_scrollbar = ttk.Scrollbar(log_window, orient="vertical", command=log_text.yview)
         log_text.configure(yscrollcommand=log_scrollbar.set)
 
@@ -373,18 +596,42 @@ class PunchCardApp:
         self.status_text.delete(1.0, tk.END)
 
         # 顯示今日日期
-        today = datetime.now().strftime('%Y-%m-%d')
-        self.status_text.insert(tk.END, f"今日日期: {today}\n")
-        self.status_text.insert(tk.END, f"設定時間: 上班 {self.punch_in_time}, 下班 {self.punch_out_time}\n")
+        today = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.status_text.insert(tk.END, f"目前時間: {today}\n")
         self.status_text.insert(tk.END,
                                 f"Webhook URL: {self.webhook_url[:50]}{'...' if len(self.webhook_url) > 50 else ''}\n")
-        self.status_text.insert(tk.END, "-" * 50 + "\n")
+        self.status_text.insert(tk.END, "-" * 80 + "\n")
+
+        # 顯示打卡設定
+        self.status_text.insert(tk.END, "打卡設定:\n")
+
+        # 上班打卡設定
+        if self.punch_in_mode == "exact":
+            self.status_text.insert(tk.END, f"  上班打卡: 精確時間 {self.punch_in_time}\n")
+        else:
+            self.status_text.insert(tk.END, f"  上班打卡: 隨機區間 {self.punch_in_start} ~ {self.punch_in_end}\n")
+            if self.punch_in_random_time:
+                random_time_str = self.punch_in_random_time.strftime('%H:%M:%S')
+                executed_status = "已執行" if self.punch_in_executed else "待執行"
+                self.status_text.insert(tk.END, f"    今日隨機時間: {random_time_str} ({executed_status})\n")
+
+        # 下班打卡設定
+        if self.punch_out_mode == "exact":
+            self.status_text.insert(tk.END, f"  下班打卡: 精確時間 {self.punch_out_time}\n")
+        else:
+            self.status_text.insert(tk.END, f"  下班打卡: 隨機區間 {self.punch_out_start} ~ {self.punch_out_end}\n")
+            if self.punch_out_random_time:
+                random_time_str = self.punch_out_random_time.strftime('%H:%M:%S')
+                executed_status = "已執行" if self.punch_out_executed else "待執行"
+                self.status_text.insert(tk.END, f"    今日隨機時間: {random_time_str} ({executed_status})\n")
+
+        self.status_text.insert(tk.END, "-" * 80 + "\n")
 
         # 顯示今日打卡記錄
         if self.punch_records:
             self.status_text.insert(tk.END, "今日打卡記錄:\n")
             for record in self.punch_records[-10:]:  # 只顯示最近10筆記錄
-                self.status_text.insert(tk.END, f"{record}\n")
+                self.status_text.insert(tk.END, f"  {record}\n")
         else:
             self.status_text.insert(tk.END, "今日尚未有打卡記錄\n")
 
