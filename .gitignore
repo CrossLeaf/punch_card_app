@@ -1,0 +1,24 @@
+# 虛擬環境
+.venv/
+venv/
+
+# Python 快取
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 日誌檔案
+logs/
+*.log
+
+# 設定檔案（如果包含敏感資訊）
+punch_config.json
+
+# IDE
+.vscode/
+.idea/
+
+# 系統檔案
+.DS_Store
+Thumbs.db
