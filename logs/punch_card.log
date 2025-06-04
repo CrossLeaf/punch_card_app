@@ -1,0 +1,35 @@
+2025-06-04 22:23:07,340 - INFO - 設定檔載入成功: punch_config.json
+2025-06-04 22:23:07,352 - INFO - 排程器啟動
+2025-06-04 22:23:07,352 - INFO - 應用程式啟動成功
+2025-06-04 22:23:20,390 - INFO - 開始測試 Webhook: https://prod-48.southeastasia.logic.azure.com:443/workflows/05d16d6c5b924d278e36280d1e15943f/triggers/manual/paths/invoke?api-version=2016-06-01
+2025-06-04 22:23:20,390 - DEBUG - 準備發送 Webhook 請求:
+2025-06-04 22:23:20,390 - DEBUG -   URL: https://prod-48.southeastasia.logic.azure.com:443/workflows/05d16d6c5b924d278e36280d1e15943f/triggers/manual/paths/invoke?api-version=2016-06-01
+2025-06-04 22:23:20,391 - DEBUG -   資料: {
+  "type": "測試打卡",
+  "timestamp": "2025-06-04T22:23:20.390936",
+  "message": "自動打卡系統 - 測試打卡"
+}
+2025-06-04 22:23:20,671 - DEBUG - 收到回應:
+2025-06-04 22:23:20,671 - DEBUG -   狀態碼: 401
+2025-06-04 22:23:20,671 - DEBUG -   回應標頭: {'Content-Length': '155', 'Content-Type': 'application/json; charset=utf-8', 'Date': 'Wed, 04 Jun 2025 14:23:20 GMT', 'Cache-Control': 'no-cache', 'Expires': '-1', 'Pragma': 'no-cache', 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains', 'x-ms-request-id': 'southeastasia:8d96b532-01d8-4fae-b832-2db3f1fc5653'}
+2025-06-04 22:23:20,671 - DEBUG -   回應內容: {"error":{"code":"DirectApiAuthorizationRequired","message":"The OAuth authorization scheme is required. Please add authentication scheme and try again."}}
+2025-06-04 22:23:20,671 - WARNING - Webhook 請求失敗 - 測試打卡, 狀態碼: 401, 回應: {"error":{"code":"DirectApiAuthorizationRequired","message":"The OAuth authorization scheme is required. Please add authentication scheme and try again."}}
+2025-06-04 22:23:20,671 - ERROR - Webhook 測試失敗 - 無回應
+2025-06-04 22:24:22,862 - INFO - 設定變更: Webhook URL: https://prod-48.southeastasia.logic.azure.com:443/workflows/05d16d6c5b924d278e36280d1e15943f/triggers/manual/paths/invoke?api-version=2016-06-01 -> https://prod-48.southeastasia.logic.azure.com:443/workflows/05d16d6c5b924d278e36280d1e15943f/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=k2MWtkl4AUXxk5Wnl4DuixYneDV7mHhpH_Ylk5wSh1Y
+2025-06-04 22:24:22,862 - INFO - 設定變更: 上班時間: 09:00 -> 09:00
+2025-06-04 22:24:22,862 - INFO - 設定變更: 下班時間: 18:00 -> 18:00
+2025-06-04 22:24:22,864 - INFO - 設定檔儲存成功
+2025-06-04 22:24:25,501 - INFO - 開始測試 Webhook: https://prod-48.southeastasia.logic.azure.com:443/workflows/05d16d6c5b924d278e36280d1e15943f/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=k2MWtkl4AUXxk5Wnl4DuixYneDV7mHhpH_Ylk5wSh1Y
+2025-06-04 22:24:25,501 - DEBUG - 準備發送 Webhook 請求:
+2025-06-04 22:24:25,501 - DEBUG -   URL: https://prod-48.southeastasia.logic.azure.com:443/workflows/05d16d6c5b924d278e36280d1e15943f/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=k2MWtkl4AUXxk5Wnl4DuixYneDV7mHhpH_Ylk5wSh1Y
+2025-06-04 22:24:25,501 - DEBUG -   資料: {
+  "type": "測試打卡",
+  "timestamp": "2025-06-04T22:24:25.501639",
+  "message": "自動打卡系統 - 測試打卡"
+}
+2025-06-04 22:24:25,839 - DEBUG - 收到回應:
+2025-06-04 22:24:25,839 - DEBUG -   狀態碼: 202
+2025-06-04 22:24:25,840 - DEBUG -   回應標頭: {'Content-Length': '0', 'Date': 'Wed, 04 Jun 2025 14:24:25 GMT', 'Cache-Control': 'no-cache', 'Expires': '-1', 'Pragma': 'no-cache', 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains', 'x-ms-workflow-run-id': '08584525598197349426103547572CU24', 'x-ms-correlation-id': '96af55c6-57f2-4c4f-9833-2cd8c66ef7f7', 'x-ms-client-tracking-id': '08584525598197349426103547572CU24', 'x-ms-trigger-history-name': '08584525598197349426103547572CU24', 'x-ms-execution-location': 'southeastasia', 'x-ms-workflow-system-id': '/locations/southeastasia/scaleunits/prod-48/workflows/05d16d6c5b924d278e36280d1e15943f', 'x-ms-workflow-id': '05d16d6c5b924d278e36280d1e15943f', 'x-ms-workflow-version': '08584525598384124482', 'x-ms-workflow-name': 'c5528a89-c8bc-4976-8611-5f037d3d7056', 'x-ms-tracking-id': '96af55c6-57f2-4c4f-9833-2cd8c66ef7f7', 'x-ms-ratelimit-burst-remaining-workflow-writes': '224', 'x-ms-ratelimit-remaining-workflow-download-contentsize': '161060864', 'x-ms-ratelimit-remaining-workflow-upload-contentsize': '161060707', 'x-ms-ratelimit-time-remaining-directapirequests': '14999944', 'x-ms-request-id': 'southeastasia:96af55c6-57f2-4c4f-9833-2cd8c66ef7f7'}
+2025-06-04 22:24:25,840 - DEBUG -   回應內容: 
+2025-06-04 22:24:25,840 - WARNING - Webhook 請求失敗 - 測試打卡, 狀態碼: 202, 回應: 
+2025-06-04 22:24:25,840 - INFO - Webhook 測試成功 - 狀態碼: 202
