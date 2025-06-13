@@ -242,11 +242,11 @@ class PunchCardApp:
         """設定預設值"""
         self.webhook_url = ''
         self.punch_in_time = '09:00'
-        self.punch_out_time = '18:00'
+        self.punch_out_time = '18:30'
         self.punch_in_start = '09:00'
-        self.punch_in_end = '09:20'
-        self.punch_out_start = '18:00'
-        self.punch_out_end = '18:20'
+        self.punch_in_end = '09:10'
+        self.punch_out_start = '18:30'
+        self.punch_out_end = '18:35'
         self.punch_in_mode = 'exact'
         self.punch_out_mode = 'exact'
 
