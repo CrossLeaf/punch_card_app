@@ -68,7 +68,10 @@ class PunchCardApp:
         # 檢查是否為休息日
         is_rest, rest_reason = self.is_rest_day(current_date)
         if is_rest:
-            self.logger.info(f"今日為休息日，不執行打卡: {rest_reason}")
+            # 如果是休息日，記錄當前日期並跳過今日所有檢查
+            if not hasattr(self, 'last_rest_date') or self.last_rest_date != current_date:
+                self.last_rest_date = current_date
+                self.logger.info(f"今日為休息日，跳過所有打卡檢查: {rest_reason}")
             return
 
         # 檢查是否需要重置每日執行狀態
