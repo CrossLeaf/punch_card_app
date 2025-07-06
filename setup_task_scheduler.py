@@ -235,6 +235,65 @@ class TaskSchedulerSetup:
             print(f"❌ 檢查任務時發生錯誤: {e}")
             return False
 
+    def pause_task(self):
+        """暫停工作排程器任務"""
+        print("⏸️  暫停工作排程器任務...")
+        print("-" * 50)
+
+        try:
+            # 使用 schtasks /change 命令來停用任務
+            cmd = f'schtasks /change /tn "{self.task_name}" /disable'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                print("✅ 任務已成功暫停！")
+                print("   任務將不會自動執行，直到您重新啟用")
+                return True
+            else:
+                print(f"❌ 暫停任務失敗: {result.stderr}")
+                return False
+
+        except Exception as e:
+            print(f"❌ 暫停任務時發生錯誤: {e}")
+            return False
+
+    def resume_task(self):
+        """恢復工作排程器任務"""
+        print("▶️  恢復工作排程器任務...")
+        print("-" * 50)
+
+        try:
+            # 使用 schtasks /change 命令來啟用任務
+            cmd = f'schtasks /change /tn "{self.task_name}" /enable'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                print("✅ 任務已成功恢復！")
+                print("   任務將按照原定排程自動執行")
+                return True
+            else:
+                print(f"❌ 恢復任務失敗: {result.stderr}")
+                return False
+
+        except Exception as e:
+            print(f"❌ 恢復任務時發生錯誤: {e}")
+            return False
+
+    def get_task_state(self):
+        """取得任務當前狀態（啟用/停用）"""
+        try:
+            cmd = f'schtasks /query /tn "{self.task_name}" /fo LIST /v'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp950')
+
+            if result.returncode == 0:
+                lines = result.stdout.split('\n')
+                for line in lines:
+                    if '狀態:' in line or 'Status:' in line:
+                        return line.strip()
+            return "未知狀態"
+        except Exception as e:
+            return f"無法取得狀態: {e}"
+
 
 def main():
     """主程式"""
@@ -250,9 +309,11 @@ def main():
         print("2. 刪除自動啟動任務")
         print("3. 檢查任務狀態")
         print("4. 測試任務執行")
-        print("5. 退出程式")
+        print("5. 暫停排程任務")
+        print("6. 恢復排程任務")
+        print("7. 退出程式")
 
-        choice = input("\n請輸入選項 (1-5): ").strip()
+        choice = input("\n請輸入選項 (1-7): ").strip()
 
         if choice == "1":
             setup.create_task()
@@ -262,11 +323,20 @@ def main():
 
         elif choice == "3":
             setup.check_task_status()
+            # 顯示當前狀態
+            state = setup.get_task_state()
+            print(f"\n📋 當前任務狀態: {state}")
 
         elif choice == "4":
             setup.test_task()
 
         elif choice == "5":
+            setup.pause_task()
+
+        elif choice == "6":
+            setup.resume_task()
+
+        elif choice == "7":
             print("👋 退出程式")
             break
 
